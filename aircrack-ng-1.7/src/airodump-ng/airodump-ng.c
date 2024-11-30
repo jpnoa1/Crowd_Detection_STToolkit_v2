@@ -118,7 +118,7 @@ char **mobile_manufacturers_list;
 #define MAC_ADDR_SIZE 18		//MAC address size + '\0'
 
 char different_mac_addresses[DIFF_MAC_ADDRS_SIZE][MAC_ADDR_SIZE]; 
-int different_mac_addresses_power[DIFF_MAC_ADDRS_SIZE][8];
+char different_mac_addresses_power[DIFF_MAC_ADDRS_SIZE][8];
 char different_mac_addresses_manuf[DIFF_MAC_ADDRS_SIZE][30];  
 int pos_different_mac_addresses = 0;
 int number_different_mac_addresses = sizeof(different_mac_addresses)/sizeof(different_mac_addresses[0]);
@@ -1239,6 +1239,150 @@ static int remove_namac(unsigned char * mac)
 
 	return (0);
 }
+
+
+static int callback(void *NotUsed, int argc, char **argv, char **azColName) {
+   int i;
+   for(i = 0; i<argc; i++) {
+      printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+   }
+   printf("\n");
+   return 0;
+}
+
+
+char* concat(const char *s1, const char *s2)
+{
+    char *result = malloc(strlen(s1) + strlen(s2) + 1); // +1 for the null-terminator
+    // in real code you would check for errors in malloc here
+    strcpy(result, s1);
+    strcat(result, s2);
+    return result;
+}
+
+
+void putInToDataPacketsDB(char* id, char* manuf, sqlite3 *db){
+	char *zErrMsg = 0;
+    int result;
+    char *sqlstatment , err_msg;
+    const char* data ;
+    char *strC , *strD , *strE , *strF;
+
+	//Search for ID
+
+	sqlstatment = "Select * from Data_Packets where ID='" ;
+    strC = concat(sqlstatment , concat(id , "';"));
+
+    struct sqlite3_stmt *selectstmt;
+    result = sqlite3_prepare_v2(db, strC, -1, &selectstmt, NULL);
+
+    if (result != SQLITE_OK ) {
+		sqlite3_finalize(selectstmt);
+        fprintf(stderr, "Failed to do select \n");
+        return;
+    }
+
+	if (sqlite3_step(selectstmt) == SQLITE_ROW){
+
+		//Record found
+
+		sqlite3_finalize(selectstmt);
+		sqlstatment = "UPDATE Data_Packets set Last_Time_Found=CURRENT_TIMESTAMP WHERE ID ='" ;
+		strC = concat(sqlstatment , concat(id , "';"));
+
+		result = sqlite3_exec(db, strC, callback, 0, &zErrMsg);
+		if (result != SQLITE_OK ) {
+			fprintf(stderr, "Failed to do update  \n");
+			fprintf(stderr, "SQL error: %s\n", zErrMsg);
+			sqlite3_free(zErrMsg);
+			return;
+		}
+
+	}else{
+
+		//No record found
+		sqlite3_finalize(selectstmt);
+		sqlstatment="";
+		sqlstatment = "INSERT INTO Data_Packets VALUES( 'Data Packet' , '" ;
+
+		strC = concat(sqlstatment , id);
+		strD = concat(strC, "' , CURRENT_TIMESTAMP , CURRENT_TIMESTAMP , '" );
+		strE = concat(strD, manuf);
+		strF = concat(strE, "');");
+
+		result = sqlite3_exec(db, strF, callback, 0, &zErrMsg);
+		if (result != SQLITE_OK ) {
+			
+			fprintf(stderr, "Failed to do insert \n");
+			fprintf(stderr, "SQL error: %s\n", zErrMsg);
+			sqlite3_free(zErrMsg);
+			return;
+		}
+	}
+}
+
+
+void putInToProbeRequestsDB(char* id, char* manuf, sqlite3 *db){
+	char *zErrMsg = 0;
+    int result;
+    char *sqlstatment , err_msg;
+    const char* data ;
+    char *strC , *strD , *strE , *strF;
+
+	//Search for ID
+
+	sqlstatment = "Select * from Probe_Requests where ID='" ;
+    strC = concat(sqlstatment , concat(id , "';"));
+
+    struct sqlite3_stmt *selectstmt;
+    result = sqlite3_prepare_v2(db, strC, -1, &selectstmt, NULL);
+
+    if (result != SQLITE_OK ) {
+		sqlite3_finalize(selectstmt);
+        fprintf(stderr, "Failed to do select \n");
+        return;
+    }
+
+	if (sqlite3_step(selectstmt) == SQLITE_ROW){
+
+		//Record found
+
+		sqlite3_finalize(selectstmt);
+		sqlstatment = "UPDATE Probe_Requests set Last_Time_Found=CURRENT_TIMESTAMP WHERE ID ='" ;
+		strC = concat(sqlstatment , concat(id , "';"));
+
+		result = sqlite3_exec(db, strC, callback, 0, &zErrMsg);
+		if (result != SQLITE_OK ) {
+			fprintf(stderr, "Failed to do update  \n");
+			fprintf(stderr, "SQL error: %s\n", zErrMsg);
+			sqlite3_free(zErrMsg);
+			return;
+		}
+
+	}else{
+
+		//No record found
+
+		sqlite3_finalize(selectstmt);
+		sqlstatment="";
+		sqlstatment = "INSERT INTO Probe_Requests VALUES( 'Probe Request' , '" ;
+
+		strC = concat(sqlstatment , id);
+		strD = concat(strC, "' , CURRENT_TIMESTAMP , CURRENT_TIMESTAMP , '" );
+		strE = concat(strD, manuf);
+		strF = concat(strE, "');");
+
+		result = sqlite3_exec(db, strF, callback, 0, &zErrMsg);
+		if (result != SQLITE_OK ) {
+			
+			fprintf(stderr, "Failed to do insert \n");
+			fprintf(stderr, "SQL error: %s\n", zErrMsg);
+			sqlite3_free(zErrMsg);
+			return;
+		}
+	}
+}
+
 
 
 // NOTE(jbenden): This is also in ivstools.c
@@ -6248,146 +6392,8 @@ static int rearrange_frequencies(void)
 	return (0);
 }
 
-char* concat(const char *s1, const char *s2)
-{
-    char *result = malloc(strlen(s1) + strlen(s2) + 1); // +1 for the null-terminator
-    // in real code you would check for errors in malloc here
-    strcpy(result, s1);
-    strcat(result, s2);
-    return result;
-}
-
-static int callback(void *NotUsed, int argc, char **argv, char **azColName) {
-   int i;
-   for(i = 0; i<argc; i++) {
-      printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-   }
-   printf("\n");
-   return 0;
-}
 
 
-void putInToDataPacketsDB(char* id, char* manuf, sqlite3 *db){
-	char *zErrMsg = 0;
-    int result;
-    char *sqlstatment , err_msg;
-    const char* data ;
-    char *strC , *strD , *strE , *strF;
-
-	//Search for ID
-
-	sqlstatment = "Select * from Data_Packets where ID='" ;
-    strC = concat(sqlstatment , concat(id , "';"));
-
-    struct sqlite3_stmt *selectstmt;
-    result = sqlite3_prepare_v2(db, strC, -1, &selectstmt, NULL);
-
-    if (result != SQLITE_OK ) {
-		sqlite3_finalize(selectstmt);
-        fprintf(stderr, "Failed to do select \n");
-        return;
-    }
-
-	if (sqlite3_step(selectstmt) == SQLITE_ROW){
-
-		//Record found
-
-		sqlite3_finalize(selectstmt);
-		sqlstatment = "UPDATE Data_Packets set Last_Time_Found=CURRENT_TIMESTAMP WHERE ID ='" ;
-		strC = concat(sqlstatment , concat(id , "';"));
-
-		result = sqlite3_exec(db, strC, callback, 0, &zErrMsg);
-		if (result != SQLITE_OK ) {
-			fprintf(stderr, "Failed to do update  \n");
-			fprintf(stderr, "SQL error: %s\n", zErrMsg);
-			sqlite3_free(zErrMsg);
-			return;
-		}
-
-	}else{
-
-		//No record found
-		sqlite3_finalize(selectstmt);
-		sqlstatment="";
-		sqlstatment = "INSERT INTO Data_Packets VALUES( 'Data Packet' , '" ;
-
-		strC = concat(sqlstatment , id);
-		strD = concat(strC, "' , CURRENT_TIMESTAMP , CURRENT_TIMESTAMP , '" );
-		strE = concat(strD, manuf);
-		strF = concat(strE, "');");
-
-		result = sqlite3_exec(db, strF, callback, 0, &zErrMsg);
-		if (result != SQLITE_OK ) {
-			
-			fprintf(stderr, "Failed to do insert \n");
-			fprintf(stderr, "SQL error: %s\n", zErrMsg);
-			sqlite3_free(zErrMsg);
-			return;
-		}
-	}
-}
-
-
-void putInToProbeRequestsDB(char* id, char* manuf, sqlite3 *db){
-	char *zErrMsg = 0;
-    int result;
-    char *sqlstatment , err_msg;
-    const char* data ;
-    char *strC , *strD , *strE , *strF;
-
-	//Search for ID
-
-	sqlstatment = "Select * from Probe_Requests where ID='" ;
-    strC = concat(sqlstatment , concat(id , "';"));
-
-    struct sqlite3_stmt *selectstmt;
-    result = sqlite3_prepare_v2(db, strC, -1, &selectstmt, NULL);
-
-    if (result != SQLITE_OK ) {
-		sqlite3_finalize(selectstmt);
-        fprintf(stderr, "Failed to do select \n");
-        return;
-    }
-
-	if (sqlite3_step(selectstmt) == SQLITE_ROW){
-
-		//Record found
-
-		sqlite3_finalize(selectstmt);
-		sqlstatment = "UPDATE Probe_Requests set Last_Time_Found=CURRENT_TIMESTAMP WHERE ID ='" ;
-		strC = concat(sqlstatment , concat(id , "';"));
-
-		result = sqlite3_exec(db, strC, callback, 0, &zErrMsg);
-		if (result != SQLITE_OK ) {
-			fprintf(stderr, "Failed to do update  \n");
-			fprintf(stderr, "SQL error: %s\n", zErrMsg);
-			sqlite3_free(zErrMsg);
-			return;
-		}
-
-	}else{
-
-		//No record found
-
-		sqlite3_finalize(selectstmt);
-		sqlstatment="";
-		sqlstatment = "INSERT INTO Probe_Requests VALUES( 'Probe Request' , '" ;
-
-		strC = concat(sqlstatment , id);
-		strD = concat(strC, "' , CURRENT_TIMESTAMP , CURRENT_TIMESTAMP , '" );
-		strE = concat(strD, manuf);
-		strF = concat(strE, "');");
-
-		result = sqlite3_exec(db, strF, callback, 0, &zErrMsg);
-		if (result != SQLITE_OK ) {
-			
-			fprintf(stderr, "Failed to do insert \n");
-			fprintf(stderr, "SQL error: %s\n", zErrMsg);
-			sqlite3_free(zErrMsg);
-			return;
-		}
-	}
-}
 
 int main(int argc, char * argv[])
 {
