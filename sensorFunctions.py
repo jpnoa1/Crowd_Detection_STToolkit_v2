@@ -6,6 +6,10 @@ import netifaces as ni
 import time
 from paho.mqtt import client as mqtt_client
 import random
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("sensor")
 
 
 #           sensorConfiguration.py
@@ -745,36 +749,27 @@ def check_wifi_connection():
         set_wifi_connected(False)
         return False
      
-def check_lora_available():
-    cmd = "sudo rak811 -v hard-reset"
-    output = subprocess.check_output(cmd, shell=True)
-
-    if "Hard reset complete" in str(output):
+def check_lora_available(lora: asr6501) -> bool: 
+    manufacturer =lora.getManufId()  
+    if manufacturer:
+        logger.info(f"Lora available, Manufacturer: {manufacturer}")
         set_lora_available(True)
         return True
     else:
+        logger.warning("no response to AT+CGMI")
         set_lora_available(False)
         return False
 
-def check_lora_connection():
-    #RAK811 Firmware V3
-    #(It is possible to check LoRa connection by running the
-    # 'sudo rak811v3 -v get-config lora:status' command)
 
-    #RAK811 Firmware V2
-    #(It is required to send a message, there is no 
-    # command for checking Lora network connection)
-
-    cmd = "sudo rak811 -v send %"
-    output = subprocess.check_output(cmd, shell=True, timeout=300)
-
-    if "Message sent" in str(output):
-        set_lora_connected(True)
-        return True
+def check_lora_connection(lora: asr6501):
+    status=lora.getStatus()
+    ok_codes = {3, 4, 7, 8}
+    if status in ok_codes:
+        return True     
     else:
-        set_lora_connected(False)
-        return False
-            
+        return False   
+    
+
 def reestablish_wifi_connection():
     #Get upload interface
     try:
@@ -952,10 +947,29 @@ def decide_upload_technology():
     except sqlite3.Error as error:
         print("Failed to update database.", error)
 
-def get_dev_eui():
+def get_dev_eui(lora: asr6501) -> str:
     #Get dev_eui from LoRa board
-    cmd = "sudo rak811 -v get-config dev_eui"
-    dev_eui = subprocess.check_output(cmd, shell=True).decode('ascii')[:-1]
+    dev_eui = lora.getDevEui()
 
     return dev_eui
 
+def downlink_cb(mType, port, length, msgHex):
+    logger.info(f"[DOWNLINK RAW] type={mType} port={port} len={length} hex={msgHex}")
+    try:
+        payload = bytes.fromhex(msgHex).decode("utf-8")
+    except Exception as e:
+        logger.error(f"Erro a decodificar downlink: {e}")
+        return
+
+    logger.info(f"[DOWNLINK TEXT] '{payload}'")
+    if payload == "r":
+        logger.info("=> reboot sensor")
+        os.system("sudo reboot")
+    elif payload == "a":
+        logger.info("=> activate detection")
+        #receive_active()
+    elif payload == "dis":
+        logger.info("=> disable detection")
+        #receive_disable()
+    else:
+        logger.info(f"=> comando desconhecido '{payload}'")
